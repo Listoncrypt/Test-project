@@ -1,0 +1,101 @@
+<div class="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+  <div class="max-w-2xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-center mb-10">
+      <!-- <div
+        class="inline-flex items-center gap-3 rounded-full bg-slate-950 px-5 py-3 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-200/10"
+      >
+        <span class="text-sm tracking-[0.35em] text-slate-300">UNGODLY</span>
+        <span class="text-3xl font-black text-[var(--brand-logo)]">ACHV</span>
+        <span class="text-xl">💙</span>
+      </div> -->
+    </div>
+
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold text-gray-900 mb-4">Welcome aboard!</h1>
+      <p class="text-lg text-gray-600">
+        Join our Telegram channel to unlock all features and get updates
+      </p>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+      <div class="flex items-center justify-between mb-6">
+        <div class="flex-1">
+          <h2 class="text-2xl font-bold text-gray-900">
+            Join Telegram Channel
+          </h2>
+          <p class="text-gray-600 mt-2">
+            Get updates on new features and special announcements
+          </p>
+        </div>
+        <div class="text-4xl">📱</div>
+      </div>
+
+      <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+        <p class="text-blue-900">
+          <strong>Why join?</strong> You'll get access to exclusive engagement
+          tasks, community discussions, and early access to new features.
+        </p>
+      </div>
+
+      <button
+        (click)="joinTelegramChannel()"
+        [class.opacity-50]="joined"
+        [class.pointer-events-none]="joined"
+        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200"
+      >
+        {{ joined ? "✓ Joined Telegram Channel" : "Join the channel" }}
+      </button>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-lg p-8">
+      <h2 class="text-2xl font-bold text-gray-900 mb-4">
+        Onboarding Checklist
+      </h2>
+      <div class="space-y-4">
+        <div *ngFor="let item of checklist" class="flex items-center">
+          <div class="flex-shrink-0">
+            <svg
+              *ngIf="item.completed"
+              class="h-6 w-6 text-green-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <div
+              *ngIf="!item.completed"
+              class="h-6 w-6 bg-gray-300 rounded-full"
+            ></div>
+          </div>
+          <p
+            [class.text-green-700]="item.completed"
+            [class.font-semibold]="item.completed"
+            class="ml-4 text-lg text-gray-700"
+          >
+            {{ item.label }}
+          </p>
+        </div>
+      </div>
+
+      <button
+        *ngIf="allCompleted"
+        (click)="proceedToDashboard()"
+        routerLink="/dashboard"
+        class="mt-8 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200"
+      >
+        Go to Dashboard
+      </button>
+      <button
+        *ngIf="!allCompleted"
+        disabled
+        class="mt-8 w-full bg-gray-400 text-white font-bold py-3 px-4 rounded-lg cursor-not-allowed"
+      >
+        Complete onboarding to continue
+      </button>
+    </div>
+  </div>
+</div>
