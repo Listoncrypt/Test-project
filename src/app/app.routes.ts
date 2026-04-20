@@ -4,8 +4,8 @@ import { AuthGuard } from './guards/auth.guard';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: 'login',
-    pathMatch: 'full',
+    loadComponent: () =>
+      import('./pages/landing/landing.component').then((m) => m.LandingComponent),
   },
   {
     path: 'signup',
@@ -16,6 +16,13 @@ export const routes: Routes = [
     path: 'login',
     loadComponent: () =>
       import('./pages/login/login.component').then((m) => m.LoginComponent),
+  },
+  {
+    path: 'auth/twitter/callback',
+    loadComponent: () =>
+      import('./pages/twitter-callback/twitter-callback.component').then(
+        (m) => m.TwitterCallbackComponent
+      ),
   },
   {
     path: 'onboarding',
@@ -35,6 +42,6 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'login',
+    redirectTo: '',
   },
 ];
