@@ -12,6 +12,7 @@ export interface EngagementTask {
   reward: number;
   boost: number;
   actions: string;
+  postLink?: string;
 }
 
 interface SidebarMenu {
@@ -119,8 +120,8 @@ export class DashboardComponent implements OnInit {
   }
 
   engageOnX(task: EngagementTask) {
-    console.log('Opening X (Twitter)...');
-    window.open('https://x.com', '_blank');
+    console.log('Opening X (Twitter)...', task.postLink);
+    window.open(task.postLink || 'https://x.com', '_blank');
     
     // Simulate validation and task completion
     setTimeout(() => {

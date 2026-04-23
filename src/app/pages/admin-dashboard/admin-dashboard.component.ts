@@ -69,6 +69,16 @@ import { SupabaseService, Profile } from '../../services/supabase.service';
                    class="w-full bg-[#0F172A] border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
           </div>
           <div>
+            <label class="block text-sm font-medium text-gray-400 mb-1">X Post Link (URL)</label>
+            <input type="text" [(ngModel)]="newTask.postLink" placeholder="e.g. https://x.com/user/status/123" 
+                   class="w-full bg-[#0F172A] border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-1">Custom Image URL (Optional)</label>
+            <input type="text" [(ngModel)]="newTask.image" placeholder="Leave blank for auto-preview" 
+                   class="w-full bg-[#0F172A] border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
             <label class="block text-sm font-medium text-gray-400 mb-1">Reward ($)</label>
             <input type="number" [(ngModel)]="newTask.reward" step="0.1" 
                    class="w-full bg-[#0F172A] border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
@@ -97,7 +107,8 @@ export class AdminDashboardComponent implements OnInit {
   // Task Creation Form
   newTask = {
     title: '',
-    image: 'image_0.png',
+    image: '',
+    postLink: '',
     reward: 0.5,
     boost: 0.05,
     actions: ''
@@ -136,9 +147,18 @@ export class AdminDashboardComponent implements OnInit {
       return;
     }
 
+    let finalImage = this.newTask.image;
+    // If no image is provided but there is a postLink, use microlink to get a screenshot
+    if (!finalImage && this.newTask.postLink) {
+      finalImage = `https://api.microlink.io/?url=${encodeURIComponent(this.newTask.postLink)}&screenshot=true&meta=false&embed=screenshot.url`;
+    } else if (!finalImage) {
+      finalImage = 'image_0.png'; // Fallback
+    }
+
     const task = {
       id: Math.random().toString(36).substr(2, 9),
-      ...this.newTask
+      ...this.newTask,
+      image: finalImage
     };
 
     const saved = localStorage.getItem('admin_tasks');
