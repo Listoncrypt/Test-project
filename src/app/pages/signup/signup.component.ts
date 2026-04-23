@@ -32,7 +32,7 @@ export class SignupComponent implements OnInit {
 
   ngOnInit() {
     this.authService.currentUser$.subscribe((user) => {
-      if (user?.twitterId) {
+      if (user) {
         this.twitterConnected = true;
         this.twitterUser = user;
         this.loading = false;
@@ -40,7 +40,7 @@ export class SignupComponent implements OnInit {
     });
 
     const currentUser = this.authService.getCurrentUser();
-    if (currentUser?.twitterId) {
+    if (currentUser) {
       this.twitterConnected = true;
       this.twitterUser = currentUser;
     }

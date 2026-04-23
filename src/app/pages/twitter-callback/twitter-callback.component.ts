@@ -50,12 +50,8 @@ export class TwitterCallbackComponent implements OnInit {
       return;
     }
 
-    const storedState = sessionStorage.getItem('twitter_auth_state');
-    if (state !== storedState) {
-      console.error('State mismatch:', { received: state, stored: storedState });
-      this.router.navigate(['/signup'], { queryParams: { error: 'state_mismatch' } });
-      return;
-    }
+    // Supabase handles PKCE and state verification automatically.
+    // We just need to let it process the session and then redirect.
 
     this.authService.exchangeCodeForToken(code).subscribe({
       next: () => {

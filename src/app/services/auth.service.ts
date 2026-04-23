@@ -24,14 +24,24 @@ export class AuthService {
   public currentUser$ = this.currentUserSubject.asObservable();
 
   constructor(private supabaseService: SupabaseService, private router: Router) {
-    this.supabaseService.currentProfile$.subscribe(profile => {
-      if (profile) {
+    // Listen to currentProfile$ and currentUser$ to merge them
+    this.supabaseService.currentUser$.subscribe(supabaseUser => {
+      const profile = this.supabaseService.currentProfile;
+      
+      if (supabaseUser) {
+        // Extract Twitter info if it exists
+        const twitterIdentity = supabaseUser.identities?.find(id => id.provider === 'twitter' || id.provider === 'x');
+        const twitterHandle = twitterIdentity?.identity_data?.['preferred_username'] || supabaseUser.user_metadata?.['user_name'];
+        const twitterId = twitterIdentity?.id || supabaseUser.user_metadata?.['provider_id'];
+
         const user: User = {
-          id: profile.id,
-          email: profile.email,
-          role: profile.role,
-          is_approved: profile.is_approved,
-          verified: profile.is_approved
+          id: supabaseUser.id,
+          email: supabaseUser.email || '',
+          role: profile?.role || 'user',
+          is_approved: profile?.is_approved || false,
+          verified: profile?.is_approved || false,
+          twitterHandle: twitterHandle,
+          twitterId: twitterId
         };
         this.currentUserSubject.next(user);
         localStorage.setItem('currentUser', JSON.stringify(user));
@@ -61,7 +71,12 @@ export class AuthService {
   }
 
   signup(email: string, password: string): Observable<User> {
-    return from(this.supabaseService.client.auth.signUp({ email, password })).pipe(
+    const hasSession = !!this.currentUserSubject.value;
+    const request = hasSession 
+      ? this.supabaseService.client.auth.updateUser({ email, password })
+      : this.supabaseService.client.auth.signUp({ email, password });
+
+    return from(request).pipe(
       map(response => {
         if (response.error) throw response.error;
         return { id: response.data.user?.id || '', email: response.data.user?.email || '' } as User;
