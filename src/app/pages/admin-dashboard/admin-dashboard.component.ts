@@ -1,11 +1,12 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { SupabaseService, Profile } from '../../services/supabase.service';
 
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="min-h-screen bg-[#0F172A] text-white p-8">
       <h1 class="text-3xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
@@ -51,12 +52,56 @@ import { SupabaseService, Profile } from '../../services/supabase.service';
           </table>
         </div>
       </div>
+
+      <!-- Task Creation Section -->
+      <div class="mt-8 bg-[#1E293B] rounded-xl p-6 shadow-xl border border-gray-800">
+        <h2 class="text-xl font-semibold mb-4 text-gray-200">Create Engagement Task</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-1">Task Title</label>
+            <input type="text" [(ngModel)]="newTask.title" placeholder="e.g. like & retweet @user_x post" 
+                   class="w-full bg-[#0F172A] border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-1">Required Actions</label>
+            <input type="text" [(ngModel)]="newTask.actions" placeholder="e.g. like + comment + retweet" 
+                   class="w-full bg-[#0F172A] border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-1">Reward ($)</label>
+            <input type="number" [(ngModel)]="newTask.reward" step="0.1" 
+                   class="w-full bg-[#0F172A] border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-400 mb-1">Verified Boost ($)</label>
+            <input type="number" [(ngModel)]="newTask.boost" step="0.01" 
+                   class="w-full bg-[#0F172A] border border-gray-700 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500">
+          </div>
+        </div>
+        
+        <button 
+          (click)="createTask()"
+          class="mt-4 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg text-sm font-medium transition-all"
+        >
+          Publish Task to Agents
+        </button>
+      </div>
     </div>
   `
 })
 export class AdminDashboardComponent implements OnInit {
   unapprovedUsers: Profile[] = [];
   loading = true;
+  
+  // Task Creation Form
+  newTask = {
+    title: '',
+    image: 'image_0.png',
+    reward: 0.5,
+    boost: 0.05,
+    actions: ''
+  };
 
   constructor(private supabase: SupabaseService) {}
 
@@ -78,11 +123,40 @@ export class AdminDashboardComponent implements OnInit {
   async approve(userId: string) {
     try {
       await this.supabase.approveUser(userId);
-      // Remove the user from the list locally
       this.unapprovedUsers = this.unapprovedUsers.filter(u => u.id !== userId);
     } catch (error) {
       console.error('Error approving user:', error);
       alert('Failed to approve user');
     }
+  }
+
+  createTask() {
+    if (!this.newTask.title || !this.newTask.actions) {
+      alert('Please fill out task title and actions.');
+      return;
+    }
+
+    const task = {
+      id: Math.random().toString(36).substr(2, 9),
+      ...this.newTask
+    };
+
+    const saved = localStorage.getItem('admin_tasks');
+    let tasks = [];
+    if (saved) {
+      tasks = JSON.parse(saved);
+    } else {
+      // Load default tasks if starting fresh
+      tasks = [
+        { id: '1', title: 'like & retweet @user_x post', image: 'image_0.png', reward: 0.5, boost: 0.05, actions: 'like + comment + retweet' }
+      ];
+    }
+
+    tasks.unshift(task);
+    localStorage.setItem('admin_tasks', JSON.stringify(tasks));
+    
+    alert('Task successfully uploaded to the dashboard!');
+    this.newTask.title = '';
+    this.newTask.actions = '';
   }
 }

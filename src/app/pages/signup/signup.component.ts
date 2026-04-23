@@ -58,6 +58,19 @@ export class SignupComponent implements OnInit {
     }
   }
 
+  async disconnectTwitter() {
+    this.loading = true;
+    try {
+      await this.authService.logout();
+      this.twitterConnected = false;
+      this.twitterUser = null;
+      this.loading = false;
+    } catch (err) {
+      this.loading = false;
+      this.error = 'Failed to disconnect Twitter account.';
+    }
+  }
+
   onSubmit() {
     if (this.signupForm.valid && this.twitterConnected) {
       this.loading = true;

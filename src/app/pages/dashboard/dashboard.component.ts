@@ -5,7 +5,7 @@ import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { SupabaseService } from '../../services/supabase.service';
 
-interface EngagementTask {
+export interface EngagementTask {
   id: string;
   title: string;
   image: string;
@@ -29,11 +29,11 @@ interface SidebarMenu {
 })
 export class DashboardComponent implements OnInit {
   username = 'user123';
-  balance = 2.5;
-  verified = true;
-  boost = 10;
-  tasksComplete = 5;
-  earnings = 2.5;
+  balance = 0.0;
+  verified = false;
+  boost = 0;
+  tasksComplete = 0;
+  earnings = 0.0;
   withdrawals = 0.0;
   uploading = false;
   uploadSuccessUrl = '';
@@ -89,12 +89,18 @@ export class DashboardComponent implements OnInit {
   ) {}
 
   ngOnInit() {
+    this.loadTasks();
     this.authService.currentUser$.subscribe(currentUser => {
       if (currentUser) {
         this.username = currentUser.email.split('@')[0];
-        this.verified = currentUser.verified || false;
+        this.verified = currentUser.twitterId ? true : (currentUser.verified || false);
         this.boost = currentUser.boost || 0;
-        this.balance = currentUser.balance || 0;
+        
+        // Only override if the user has a stored balance, otherwise start at 0
+        if (currentUser.balance !== undefined) {
+          this.balance = currentUser.balance;
+        }
+        
         this.userInitial = this.username.charAt(0).toUpperCase();
         
         // Hide Admin menu if not admin
@@ -105,16 +111,58 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  engageOnX() {
+  loadTasks() {
+    const saved = localStorage.getItem('admin_tasks');
+    if (saved) {
+      this.engagementTasks = JSON.parse(saved);
+    }
+  }
+
+  engageOnX(task: EngagementTask) {
     console.log('Opening X (Twitter)...');
     window.open('https://x.com', '_blank');
+    
+    // Simulate validation and task completion
+    setTimeout(() => {
+      this.tasksComplete++;
+      
+      let finalReward = task.reward;
+      if (this.verified) {
+        // 10% boost for verified twitter account
+        finalReward += finalReward * 0.10; 
+      }
+      
+      this.earnings += finalReward;
+      this.balance += finalReward;
+      
+      // Mark task as done (remove from list)
+      this.engagementTasks = this.engagementTasks.filter(t => t.id !== task.id);
+      
+      alert(`Task validated! You earned $${finalReward.toFixed(2)}`);
+    }, 2000);
   }
 
   submitWithdrawal() {
-    if (this.withdrawalForm.amount >= 40 && this.withdrawalForm.solanaAddress) {
-      console.log('Withdrawal requested:', this.withdrawalForm);
-      // Handle withdrawal submission
+    if (this.withdrawalForm.amount < 40) {
+      alert('Minimum withdrawal is $40.');
+      return;
     }
+    if (!this.withdrawalForm.solanaAddress) {
+      alert('Please provide a Solana address.');
+      return;
+    }
+    if (this.balance < this.withdrawalForm.amount) {
+      alert('Insufficient balance.');
+      return;
+    }
+    
+    this.balance -= this.withdrawalForm.amount;
+    this.withdrawals += this.withdrawalForm.amount;
+    
+    alert(`Withdrawal of $${this.withdrawalForm.amount} to ${this.withdrawalForm.solanaAddress} submitted successfully!`);
+    
+    this.withdrawalForm.amount = 40;
+    this.withdrawalForm.solanaAddress = '';
   }
 
   async uploadFile(event: any, type: 'images'|'videos') {
