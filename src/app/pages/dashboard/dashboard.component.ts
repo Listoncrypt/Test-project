@@ -36,8 +36,6 @@ export class DashboardComponent implements OnInit {
   tasksComplete = 0;
   earnings = 0.0;
   withdrawals = 0.0;
-  uploading = false;
-  uploadSuccessUrl = '';
 
   sidebarMenus: SidebarMenu[] = [
     { icon: '📊', label: 'Dashboard', href: '#' },
@@ -170,23 +168,6 @@ export class DashboardComponent implements OnInit {
     } catch (error) {
       console.error('Withdrawal failed', error);
       alert('Failed to submit withdrawal request. Please check if your account is fully verified.');
-    }
-  }
-
-  async uploadFile(event: any, type: 'images'|'videos') {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    this.uploading = true;
-    this.uploadSuccessUrl = '';
-    try {
-      const url = await this.supabase.uploadMedia(type, file);
-      this.uploadSuccessUrl = url;
-    } catch (error) {
-      console.error('Upload failed', error);
-      alert('Upload failed. Check if you are approved.');
-    } finally {
-      this.uploading = false;
     }
   }
 

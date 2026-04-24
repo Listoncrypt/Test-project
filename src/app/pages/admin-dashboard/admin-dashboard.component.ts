@@ -96,6 +96,26 @@ import { SupabaseService, Profile } from '../../services/supabase.service';
         >
           Publish Task to Agents
         </button>
+
+        <!-- List of Existing Tasks -->
+        <div class="mt-8 border-t border-gray-700 pt-6">
+          <h3 class="text-lg font-semibold mb-4 text-gray-300">Existing Tasks</h3>
+          <div *ngIf="existingTasks.length === 0" class="text-gray-500 text-sm">No tasks created yet.</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div *ngFor="let task of existingTasks" class="bg-[#0F172A] p-4 rounded-lg border border-gray-800 flex justify-between items-start">
+              <div>
+                <p class="font-medium text-sm">{{ task.title }}</p>
+                <p class="text-xs text-gray-500 mt-1">{{ task.actions }}</p>
+                <p class="text-xs text-blue-400 mt-1 font-bold">${{ task.reward }} + ${{ task.boost }} boost</p>
+              </div>
+              <button (click)="deleteTask(task.id)" class="text-red-500 hover:text-red-400 p-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Withdrawal Requests Section -->
@@ -142,6 +162,7 @@ import { SupabaseService, Profile } from '../../services/supabase.service';
 export class AdminDashboardComponent implements OnInit {
   unapprovedUsers: Profile[] = [];
   pendingWithdrawals: any[] = [];
+  existingTasks: any[] = [];
   loading = true;
   loadingWithdrawals = true;
   
@@ -160,6 +181,14 @@ export class AdminDashboardComponent implements OnInit {
   ngOnInit() {
     this.loadUsers();
     this.loadWithdrawals();
+    this.loadTasks();
+  }
+
+  loadTasks() {
+    const saved = localStorage.getItem('admin_tasks');
+    if (saved) {
+      this.existingTasks = JSON.parse(saved);
+    }
   }
 
   async loadUsers() {
@@ -238,9 +267,22 @@ export class AdminDashboardComponent implements OnInit {
 
     tasks.unshift(task);
     localStorage.setItem('admin_tasks', JSON.stringify(tasks));
+    this.existingTasks = tasks;
     
     alert('Task successfully uploaded to the dashboard!');
     this.newTask.title = '';
     this.newTask.actions = '';
+  }
+
+  deleteTask(id: string) {
+    if (confirm('Are you sure you want to delete this task?')) {
+      const saved = localStorage.getItem('admin_tasks');
+      if (saved) {
+        let tasks = JSON.parse(saved);
+        tasks = tasks.filter((t: any) => t.id !== id);
+        localStorage.setItem('admin_tasks', JSON.stringify(tasks));
+        this.existingTasks = tasks;
+      }
+    }
   }
 }
