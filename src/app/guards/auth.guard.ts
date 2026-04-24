@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { Observable } from 'rxjs';
 import {
   CanActivate,
   ActivatedRouteSnapshot,
@@ -17,13 +18,31 @@ export class AuthGuard implements CanActivate {
   canActivate(
     route: ActivatedRouteSnapshot,
     state: RouterStateSnapshot
-  ): boolean {
-    if (this.authService.isAuthenticated()) {
-      return true;
-    }
+  ): Observable<boolean> {
+    return this.authService.currentUser$.pipe(
+      // Wait until we have a user or we are sure there is no session
+      // For now, we take the first value emitted by combineLatest in AuthService
+      map(user => {
+        if (!user) {
+          this.router.navigate(['/login'], { queryParams: { returnUrl: state.url } });
+          return false;
+        }
 
-    // Not authenticated, redirect to login
-    this.router.navigate(['/login'], { queryParams: { returnUrl: state.url } });
-    return false;
+        // Admins are always allowed
+        if (user.role === 'admin') {
+          return true;
+        }
+
+        // Check if user is approved
+        if (user.is_approved) {
+          return true;
+        }
+
+        // Authenticated but not approved
+        alert('Your account is currently waiting for admin approval. You will be able to access the dashboard once approved.');
+        this.router.navigate(['/login']);
+        return false;
+      })
+    );
   }
 }

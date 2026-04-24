@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, from, of } from 'rxjs';
-import { map, switchMap, catchError } from 'rxjs/operators';
+import { BehaviorSubject, Observable, from, of, combineLatest } from 'rxjs';
+import { map, switchMap, catchError, filter } from 'rxjs/operators';
 import { Router } from '@angular/router';
 import { SupabaseService } from './supabase.service';
 
@@ -24,10 +24,11 @@ export class AuthService {
   public currentUser$ = this.currentUserSubject.asObservable();
 
   constructor(private supabaseService: SupabaseService, private router: Router) {
-    // Listen to currentProfile$ and currentUser$ to merge them
-    this.supabaseService.currentUser$.subscribe(supabaseUser => {
-      const profile = this.supabaseService.currentProfile;
-      
+    // Merge currentUser and currentProfile to create the app's User object
+    combineLatest([
+      this.supabaseService.currentUser$,
+      this.supabaseService.currentProfile$
+    ]).subscribe(([supabaseUser, profile]) => {
       if (supabaseUser) {
         // Extract Twitter info if it exists
         const twitterIdentity = supabaseUser.identities?.find(id => id.provider === 'twitter' || id.provider === 'x');
