@@ -24,7 +24,7 @@ import { AuthService } from '../../services/auth.service';
 
         <div class="space-y-4">
           <a 
-            href="https://t.me/your_telegram_link" 
+            href="https://t.me/Ungodlyachvportfolio" 
             target="_blank"
             class="block w-full bg-[#229ED9] hover:bg-[#229ED9]/90 text-white font-semibold py-3 px-6 rounded-xl transition-all transform hover:scale-[1.02]"
           >

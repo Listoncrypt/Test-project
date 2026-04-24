@@ -39,9 +39,6 @@ export class DashboardComponent implements OnInit {
 
   sidebarMenus: SidebarMenu[] = [
     { icon: '📊', label: 'Dashboard', href: '#' },
-    { icon: '💰', label: 'My Earnings', href: '#' },
-    { icon: '💸', label: 'Withdraw Funds', href: '#' },
-    { icon: '⚙️', label: 'Settings', href: '#' },
     { icon: '🛡️', label: 'Admin', href: '/admin-dashboard' },
   ];
 
