@@ -64,9 +64,11 @@ export class SignupComponent implements OnInit {
     const twitterData = await this.authService.getTwitterFollowers();
     
     if (twitterData === null) {
+      console.error('DEBUG: Twitter verification returned null');
       this.error = 'Unable to verify your X/Twitter followers. Please ensure your account has public metrics visible or try reconnecting. Note: We require OAuth 2.0 with "users.read" permissions.';
       this.loading = false;
-      this.disconnectTwitter();
+      // DON'T disconnect immediately, let the user see the error and debug logs
+      // this.disconnectTwitter(); 
       return;
     }
 

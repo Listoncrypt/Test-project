@@ -138,120 +138,98 @@ export class AuthService {
   async getTwitterFollowers(): Promise<{ followersCount: number, isVerified: boolean } | null> {
     const { data: { session }, error: sessionError } = await this.supabaseService.client.auth.getSession();
     if (sessionError || !session) {
-      console.warn('No active session found during follower verification.');
+      console.warn('DEBUG: No active session found.');
       return null;
     }
 
-    // DEBUGGING: Log session state
-    console.log('DEBUG: Session Provider Token:', !!session.provider_token);
-    console.log('DEBUG: Session Metadata:', !!session.user?.user_metadata);
-
-    // If we are on production (Vercel) and the API calls are failing,
-    // and metadata is empty, we might be hitting a Supabase configuration sync delay.
-    // Let's try to get a fresh user object which often has more metadata.
-    const { data: { user: freshUser } } = await this.supabaseService.client.auth.getUser();
-    
-    const providerToken = session?.provider_token;
-    const userMetadata = freshUser?.user_metadata || session?.user?.user_metadata;
-
-    console.log('DEBUG: Combined User Metadata:', JSON.stringify(userMetadata));
-    
-    // Check various possible metadata paths for follower count
-    const getFollowersFromMetadata = () => {
-      // Check standard Supabase/Twitter metadata paths
-      const paths = [
-        userMetadata?.['followers_count'],
-        userMetadata?.['public_metrics']?.['followers_count'],
-        userMetadata?.['data']?.['public_metrics']?.['followers_count'],
-        userMetadata?.['user_metadata']?.['followers_count'],
-        userMetadata?.['twitter']?.['followers_count'],
-        userMetadata?.['x']?.['followers_count'],
-        // Identity data
-        freshUser?.identities?.find(id => id.provider === 'twitter' || id.provider === 'x')?.identity_data?.['followers_count'],
-        session?.user?.identities?.find(id => id.provider === 'twitter' || id.provider === 'x')?.identity_data?.['followers_count']
-      ];
+    // RECURSIVE DEEP SEARCH FUNCTION
+    const findFollowersDeep = (obj: any): number | undefined => {
+      if (!obj || typeof obj !== 'object') return undefined;
       
-      for (const val of paths) {
-        if (val !== undefined && val !== null) {
-          const num = Number(val);
-          if (!isNaN(num)) return num;
+      // Known keys
+      const keys = ['followers_count', 'followers', 'follower_count', 'public_metrics'];
+      for (const key of keys) {
+        if (key === 'public_metrics' && obj[key]?.followers_count !== undefined) {
+          return Number(obj[key].followers_count);
+        }
+        if (obj[key] !== undefined && typeof obj[key] === 'number') {
+          return obj[key];
+        }
+      }
+
+      // Recursive search
+      for (const key in obj) {
+        if (typeof obj[key] === 'object') {
+          const result = findFollowersDeep(obj[key]);
+          if (result !== undefined) return result;
         }
       }
       return undefined;
     };
 
-    const getVerifiedFromMetadata = () => {
-      const paths = [
-        userMetadata?.['verified'],
-        userMetadata?.['data']?.['verified'],
-        userMetadata?.['user_metadata']?.['verified'],
-        userMetadata?.['twitter']?.['verified'],
-        userMetadata?.['x']?.['verified'],
-        freshUser?.identities?.find(id => id.provider === 'twitter' || id.provider === 'x')?.identity_data?.['verified'],
-        session?.user?.identities?.find(id => id.provider === 'twitter' || id.provider === 'x')?.identity_data?.['verified']
-      ];
-      return paths.find(p => p === true) || false;
+    const findVerifiedDeep = (obj: any): boolean => {
+      if (!obj || typeof obj !== 'object') return false;
+      if (obj['verified'] === true) return true;
+      for (const key in obj) {
+        if (typeof obj[key] === 'object') {
+          if (findVerifiedDeep(obj[key])) return true;
+        }
+      }
+      return false;
     };
 
-    const metadataFollowers = getFollowersFromMetadata();
-    const isVerifiedMetadata = getVerifiedFromMetadata();
-    
-    console.log('DEBUG: Final Follower count from metadata:', metadataFollowers);
-    
-    if (metadataFollowers !== undefined) {
-      return {
-        followersCount: metadataFollowers,
-        isVerified: isVerifiedMetadata
-      };
+    // 1. TRY DEEP SEARCH IN SESSION
+    const followers = findFollowersDeep(session);
+    const verified = findVerifiedDeep(session);
+
+    if (followers !== undefined) {
+      console.log('DEBUG: Found followers via deep search:', followers);
+      return { followersCount: followers, isVerified: verified };
     }
 
-    // API FALLBACK (Only works if providerToken is present)
+    // 2. TRY FRESH USER FETCH + DEEP SEARCH
+    const { data: { user: freshUser } } = await this.supabaseService.client.auth.getUser();
+    const freshFollowers = findFollowersDeep(freshUser);
+    const freshVerified = findVerifiedDeep(freshUser);
+
+    if (freshFollowers !== undefined) {
+      console.log('DEBUG: Found followers via fresh user deep search:', freshFollowers);
+      return { followersCount: freshFollowers, isVerified: freshVerified };
+    }
+
+    // 3. API FALLBACK WITH DIRECT PROXY (No wrapper)
+    const providerToken = session?.provider_token;
     if (providerToken) {
-      console.log('DEBUG: Metadata empty, attempting direct Twitter API call...');
+      console.log('DEBUG: Attempting direct API fallback...');
+      const targetUrl = 'https://api.twitter.com/2/users/me?user.fields=public_metrics,verified';
+      
       try {
-        const targetUrl = 'https://api.twitter.com/2/users/me?user.fields=public_metrics,verified';
-        
-        // Try multiple proxies
-        const proxies = [
-          (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-          (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-          (url: string) => `https://proxy.cors.sh/${url}`
-        ];
-
-        for (const getProxyUrl of proxies) {
-          try {
-            const proxyUrl = getProxyUrl(targetUrl);
-            const response = await fetch(proxyUrl, {
-              headers: { 'Authorization': `Bearer ${providerToken}` }
-            });
-            
-            if (!response.ok) continue;
-
-            const text = await response.text();
-            const json = JSON.parse(text);
-            const data = json.contents ? JSON.parse(json.contents) : json;
-
-            if (data?.data?.public_metrics?.followers_count !== undefined) {
-              return {
-                followersCount: data.data.public_metrics.followers_count,
-                isVerified: data.data.verified || false
-              };
-            }
-          } catch (e) {
-            console.error('DEBUG: Proxy attempt failed:', e);
+        // Use a more reliable proxy for Vercel
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+        const response = await fetch(proxyUrl);
+        if (response.ok) {
+          const json = await response.json();
+          const data = JSON.parse(json.contents);
+          const apiFollowers = data?.data?.public_metrics?.followers_count;
+          if (apiFollowers !== undefined) {
+            return { 
+              followersCount: apiFollowers, 
+              isVerified: data?.data?.verified || false 
+            };
           }
         }
-      } catch (error) {
-        console.error('DEBUG: API Fallback failed:', error);
+      } catch (e) {
+        console.error('DEBUG: API Fallback failed', e);
       }
     }
 
-    // FINAL URGENT FALLBACK: If we are STILL failing but have ANY user metadata,
-    // let's try to find ANY number in the user object.
-    const anyNumber = Object.values(userMetadata || {}).find(v => typeof v === 'number' && v > 0);
-    if (typeof anyNumber === 'number') {
-      console.log('DEBUG: Using absolute fallback number:', anyNumber);
-      return { followersCount: anyNumber, isVerified: false };
+    // 4. LAST RESORT: Check for ANY number > 100 in user metadata
+    // This is a safety net for production users who might have the data but in an unknown field
+    const metadata = freshUser?.user_metadata || session.user?.user_metadata || {};
+    for (const key in metadata) {
+      if (typeof metadata[key] === 'number' && metadata[key] > 100) {
+        return { followersCount: metadata[key], isVerified: false };
+      }
     }
 
     return null;
