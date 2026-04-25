@@ -173,9 +173,10 @@ export class AuthService {
     const followersKeys = ['followers_count', 'followers', 'follower_count'];
     let followers = findValueDeep(session, followersKeys);
     
-    // Check public_metrics specifically
-    if (followers === undefined && session.user?.user_metadata?.public_metrics?.followers_count !== undefined) {
-      followers = session.user.user_metadata.public_metrics.followers_count;
+    // Check public_metrics specifically using bracket notation for TS compliance
+    const userMetadata = session.user?.user_metadata as any;
+    if (followers === undefined && userMetadata?.['public_metrics']?.['followers_count'] !== undefined) {
+      followers = userMetadata['public_metrics']['followers_count'];
     }
 
     const verified = findValueDeep(session, ['verified']) === true || findValueDeep(session, ['verified']) === 'true';
