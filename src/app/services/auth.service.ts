@@ -99,7 +99,10 @@ export class AuthService {
       provider: 'x',
       options: {
         redirectTo: `${window.location.origin}/auth/twitter/callback`,
-        scopes: 'users.read tweet.read'
+        scopes: 'users.read tweet.read',
+        queryParams: {
+          prompt: 'consent'
+        }
       }
     });
     if (error) console.error('Error with Twitter Auth', error);
@@ -142,24 +145,43 @@ export class AuthService {
       return null;
     }
 
+    // DEBUG: Log everything for inspection
+    console.log('DEBUG: Full session object:', JSON.stringify(session));
+
     // RECURSIVE DEEP SEARCH FUNCTION
     const findFollowersDeep = (obj: any): number | undefined => {
       if (!obj || typeof obj !== 'object') return undefined;
       
-      // Known keys
-      const keys = ['followers_count', 'followers', 'follower_count', 'public_metrics'];
+      // Known keys from Twitter API v2 and Supabase identities
+      const keys = [
+        'followers_count', 
+        'followers', 
+        'follower_count', 
+        'public_metrics'
+      ];
+
       for (const key of keys) {
         if (key === 'public_metrics' && obj[key]?.followers_count !== undefined) {
+          console.log('DEBUG: Found followers_count in public_metrics:', obj[key].followers_count);
           return Number(obj[key].followers_count);
         }
         if (obj[key] !== undefined && typeof obj[key] === 'number') {
+          console.log(`DEBUG: Found ${key}:`, obj[key]);
           return obj[key];
+        }
+        // Sometimes numbers are strings in metadata
+        if (obj[key] !== undefined && typeof obj[key] === 'string') {
+          const num = Number(obj[key]);
+          if (!isNaN(num)) {
+            console.log(`DEBUG: Found ${key} as string:`, obj[key]);
+            return num;
+          }
         }
       }
 
       // Recursive search
       for (const key in obj) {
-        if (typeof obj[key] === 'object') {
+        if (typeof obj[key] === 'object' && obj[key] !== null) {
           const result = findFollowersDeep(obj[key]);
           if (result !== undefined) return result;
         }
@@ -169,9 +191,9 @@ export class AuthService {
 
     const findVerifiedDeep = (obj: any): boolean => {
       if (!obj || typeof obj !== 'object') return false;
-      if (obj['verified'] === true) return true;
+      if (obj['verified'] === true || obj['verified'] === 'true') return true;
       for (const key in obj) {
-        if (typeof obj[key] === 'object') {
+        if (typeof obj[key] === 'object' && obj[key] !== null) {
           if (findVerifiedDeep(obj[key])) return true;
         }
       }
@@ -189,6 +211,8 @@ export class AuthService {
 
     // 2. TRY FRESH USER FETCH + DEEP SEARCH
     const { data: { user: freshUser } } = await this.supabaseService.client.auth.getUser();
+    console.log('DEBUG: Fresh user object:', JSON.stringify(freshUser));
+    
     const freshFollowers = findFollowersDeep(freshUser);
     const freshVerified = findVerifiedDeep(freshUser);
 
@@ -200,23 +224,33 @@ export class AuthService {
     // 3. API FALLBACK WITH DIRECT PROXY (No wrapper)
     const providerToken = session?.provider_token;
     if (providerToken) {
-      console.log('DEBUG: Attempting direct API fallback...');
+      console.log('DEBUG: Attempting direct API fallback with token:', providerToken.substring(0, 10) + '...');
       const targetUrl = 'https://api.twitter.com/2/users/me?user.fields=public_metrics,verified';
       
       try {
-        // Use a more reliable proxy for Vercel
+        // Use AllOrigins with specific encoding to ensure headers pass through
         const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-        const response = await fetch(proxyUrl);
+        const response = await fetch(proxyUrl, {
+          headers: {
+            'Authorization': `Bearer ${providerToken}`
+          }
+        });
+
         if (response.ok) {
           const json = await response.json();
-          const data = JSON.parse(json.contents);
-          const apiFollowers = data?.data?.public_metrics?.followers_count;
-          if (apiFollowers !== undefined) {
-            return { 
-              followersCount: apiFollowers, 
-              isVerified: data?.data?.verified || false 
-            };
+          if (json.contents) {
+            const data = JSON.parse(json.contents);
+            console.log('DEBUG: API Response data:', JSON.stringify(data));
+            const apiFollowers = data?.data?.public_metrics?.followers_count;
+            if (apiFollowers !== undefined) {
+              return { 
+                followersCount: Number(apiFollowers), 
+                isVerified: data?.data?.verified || false 
+              };
+            }
           }
+        } else {
+          console.error('DEBUG: Proxy response not OK:', response.status);
         }
       } catch (e) {
         console.error('DEBUG: API Fallback failed', e);
@@ -224,11 +258,13 @@ export class AuthService {
     }
 
     // 4. LAST RESORT: Check for ANY number > 100 in user metadata
-    // This is a safety net for production users who might have the data but in an unknown field
     const metadata = freshUser?.user_metadata || session.user?.user_metadata || {};
     for (const key in metadata) {
-      if (typeof metadata[key] === 'number' && metadata[key] > 100) {
-        return { followersCount: metadata[key], isVerified: false };
+      const val = metadata[key];
+      const num = Number(val);
+      if (!isNaN(num) && num > 100 && key.toLowerCase().includes('count')) {
+        console.log(`DEBUG: Using heuristic fallback for key ${key}:`, num);
+        return { followersCount: num, isVerified: false };
       }
     }
 
