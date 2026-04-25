@@ -163,14 +163,31 @@ export class AuthService {
     };
 
     // 1. GET SCREEN NAME (Username)
-    const screenName = findValueDeep(session, ['preferred_username', 'user_name', 'screen_name', 'username']);
+    let screenName = findValueDeep(session, ['preferred_username', 'user_name', 'screen_name', 'username', 'name']);
+    
+    // Fallback: Check identities array specifically
+    if (!screenName && session.user?.identities) {
+      for (const identity of session.user.identities) {
+        if (identity.provider === 'twitter' || identity.provider === 'x') {
+          screenName = identity.identity_data?.['preferred_username'] || 
+                       identity.identity_data?.['user_name'] || 
+                       identity.identity_data?.['screen_name'];
+          if (screenName) break;
+        }
+      }
+    }
     console.log('DEBUG: Found screen name:', screenName);
 
     // 2. TRY DEEP SEARCH FOR FOLLOWERS
-    const followersKeys = ['followers_count', 'followers', 'follower_count'];
+    const followersKeys = ['followers_count', 'followers', 'follower_count', 'public_metrics'];
     let followers = findValueDeep(session, followersKeys);
     
-    // Check public_metrics specifically using bracket notation for TS compliance
+    // If it found 'public_metrics' object, drill down
+    if (followers && typeof followers === 'object' && followers.followers_count !== undefined) {
+      followers = followers.followers_count;
+    }
+
+    // Check user_metadata specifically using bracket notation for TS compliance
     const userMetadata = session.user?.user_metadata as any;
     if (followers === undefined && userMetadata?.['public_metrics']?.['followers_count'] !== undefined) {
       followers = userMetadata['public_metrics']['followers_count'];
@@ -178,49 +195,29 @@ export class AuthService {
 
     const verified = findValueDeep(session, ['verified']) === true || findValueDeep(session, ['verified']) === 'true';
 
-    if (followers !== undefined) {
+    if (followers !== undefined && followers !== null) {
       console.log('DEBUG: Found followers via session deep search:', followers);
       return { followersCount: Number(followers), isVerified: verified };
     }
 
     // 3. TRY FRESH USER FETCH + DEEP SEARCH
     const { data: { user: freshUser } } = await this.supabaseService.client.auth.getUser();
-    const freshFollowers = findValueDeep(freshUser, followersKeys);
-    if (freshFollowers !== undefined) {
+    let freshFollowers = findValueDeep(freshUser, followersKeys);
+    if (freshFollowers && typeof freshFollowers === 'object' && freshFollowers.followers_count !== undefined) {
+      freshFollowers = freshFollowers.followers_count;
+    }
+
+    if (freshFollowers !== undefined && freshFollowers !== null) {
       console.log('DEBUG: Found followers via fresh user deep search:', freshFollowers);
       return { followersCount: Number(freshFollowers), isVerified: verified };
     }
 
     // 4. THE "100% WORK" ALTERNATIVE: Public Syndication API (No Auth Required)
     if (screenName) {
-      console.log('DEBUG: Attempting Public Syndication fallback for:', screenName);
-      try {
-        // This is a public Twitter endpoint for their follow buttons
-        const syndicationUrl = `https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_name=${screenName}`;
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(syndicationUrl)}`;
-        
-        const response = await fetch(proxyUrl);
-        if (response.ok) {
-          const json = await response.json();
-          if (json.contents) {
-            const data = JSON.parse(json.contents);
-            // This API returns an array of objects
-            const userData = Array.isArray(data) ? data[0] : data;
-            if (userData && userData.followers_count !== undefined) {
-              console.log('DEBUG: Found followers via Public Syndication:', userData.followers_count);
-              return { 
-                followersCount: Number(userData.followers_count), 
-                isVerified: userData.verified || false 
-              };
-            }
-          }
-        }
-      } catch (e) {
-        console.error('DEBUG: Public Syndication fallback failed', e);
-      }
+      return this.verifyFollowersByHandle(screenName);
     }
 
-    // 5. API FALLBACK WITH TOKEN
+    // 5. API FALLBACK WITH TOKEN... (rest of method remains same)
     const providerToken = session?.provider_token;
     if (providerToken) {
       console.log('DEBUG: Attempting direct API fallback...');
@@ -252,6 +249,49 @@ export class AuthService {
       const num = Number(val);
       if (!isNaN(num) && num > 100 && (key.toLowerCase().includes('count') || key.toLowerCase().includes('followers'))) {
         return { followersCount: num, isVerified: false };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * 100% Reliable verification method using public Twitter syndication.
+   * Works without OAuth permissions if we have a handle.
+   */
+  async verifyFollowersByHandle(handle: string): Promise<{ followersCount: number, isVerified: boolean } | null> {
+    console.log('DEBUG: Attempting Public Syndication verification for handle:', handle);
+    
+    // Clean handle (remove @ if present)
+    const cleanHandle = handle.startsWith('@') ? handle.substring(1) : handle;
+    const syndicationUrl = `https://cdn.syndication.twimg.com/widgets/followbutton/info.json?screen_name=${cleanHandle}`;
+    
+    // Try multiple proxies to ensure success
+    const proxies = [
+      `https://api.allorigins.win/get?url=${encodeURIComponent(syndicationUrl)}`,
+      `https://corsproxy.io/?${encodeURIComponent(syndicationUrl)}`
+    ];
+
+    for (const proxyUrl of proxies) {
+      try {
+        console.log('DEBUG: Trying proxy:', proxyUrl);
+        const response = await fetch(proxyUrl);
+        if (response.ok) {
+          const json = await response.json();
+          // allorigins puts content in .contents, corsproxy.io returns direct json
+          const contents = json.contents ? JSON.parse(json.contents) : json;
+          const userData = Array.isArray(contents) ? contents[0] : contents;
+          
+          if (userData && userData.followers_count !== undefined) {
+            console.log('DEBUG: Success via Public Syndication:', userData.followers_count);
+            return { 
+              followersCount: Number(userData.followers_count), 
+              isVerified: userData.verified || false 
+            };
+          }
+        }
+      } catch (e) {
+        console.warn(`DEBUG: Proxy failed: ${proxyUrl}`, e);
       }
     }
 

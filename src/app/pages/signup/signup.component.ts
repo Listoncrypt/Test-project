@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { SupabaseService } from '../../services/supabase.service';
@@ -8,7 +8,7 @@ import { SupabaseService } from '../../services/supabase.service';
 @Component({
   selector: 'app-signup',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule],
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterModule],
   templateUrl: './signup.component.html',
   styleUrls: ['./signup.component.css'],
 })
@@ -18,7 +18,9 @@ export class SignupComponent implements OnInit {
   loading = false;
   error = '';
   twitterConnected = false;
+  isVerified = false;
   twitterUser: any = null;
+  manualHandle = '';
 
   constructor(
     private fb: FormBuilder,
@@ -83,8 +85,43 @@ export class SignupComponent implements OnInit {
 
     this.error = '';
     this.twitterConnected = true;
+    this.isVerified = true;
     this.twitterUser = { ...user, followersCount, isVerified };
     this.loading = false;
+  }
+
+  async verifyManualHandle() {
+    if (!this.manualHandle) {
+      this.error = 'Please enter your Twitter handle.';
+      return;
+    }
+    
+    this.loading = true;
+    this.error = 'Verifying handle...';
+    
+    try {
+      const result = await this.authService.verifyFollowersByHandle(this.manualHandle);
+      if (result) {
+        if (result.followersCount >= 1000) {
+          this.isVerified = true;
+          this.twitterUser = { 
+            ...(this.twitterUser || {}), 
+            followersCount: result.followersCount,
+            twitterHandle: this.manualHandle,
+            isVerified: result.isVerified 
+          };
+          this.error = '';
+        } else {
+          this.error = `Handle @${this.manualHandle} only has ${result.followersCount} followers. 1,000 required.`;
+        }
+      } else {
+        this.error = 'Could not find followers for this handle. Please check the spelling and ensure your profile is public.';
+      }
+    } catch (err) {
+      this.error = 'Verification failed. Please try again later.';
+    } finally {
+      this.loading = false;
+    }
   }
 
   async connectTwitter() {
